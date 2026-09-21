@@ -5,7 +5,7 @@ import json
 import os
 
 # ==========================================
-# 1. 页面基础配置 (去除了所有表情包)
+# 1. 页面基础配置 
 # ==========================================
 st.set_page_config(page_title="材料力学计算系统", layout="wide")
 
@@ -39,7 +39,8 @@ def calculate_properties(a, b, c):
             1.38 * (a ** 2) + 0.37 * (b ** 2) + 2.95 * (c ** 2))
     return ts, fs, ilss
 
-def find_multiple_solutions(target_type, target_value, tolerance, num_samples=100000):
+# 【修改点 1】新增 top_n=20 参数限制输出数量
+def find_multiple_solutions(target_type, target_value, tolerance, num_samples=100000, top_n=20):
     a_samples = np.random.uniform(0.1, 0.3, num_samples)
     b_samples = np.random.uniform(1.0, 3.0, num_samples)
     c_samples = np.random.choice([0.0, 45.0, 90.0], size=num_samples)
@@ -69,7 +70,9 @@ def find_multiple_solutions(target_type, target_value, tolerance, num_samples=10
         
     df = pd.DataFrame(results)
     if not df.empty:
+        # 按误差排序后，利用 head(top_n) 截断多余数据
         df = df.sort_values(by="误差").reset_index(drop=True)
+        df = df.head(top_n)
     return df
 
 # ==========================================
@@ -81,7 +84,7 @@ if 'current_user' not in st.session_state:
     st.session_state['current_user'] = ""
 
 # ==========================================
-# 5. 界面路由控制 (严格使用 if...else 拦截)
+# 5. 界面路由控制 
 # ==========================================
 if not st.session_state['logged_in']:
     
@@ -124,9 +127,6 @@ if not st.session_state['logged_in']:
 
 else:
     # ------------------ 核心业务模块 ------------------
-    # 只有当 st.session_state['logged_in'] 为 True 时，这里的代码才会被执行
-    
-    # 顶部状态栏
     col_user, col_space, col_exit = st.columns([2, 8, 1])
     with col_user:
         st.write(f"当前用户: {st.session_state['current_user']}")
@@ -168,16 +168,19 @@ else:
         with col4:
             target_value = st.number_input("期望数值", value=50.0)
         with col5:
-            tolerance = st.number_input("允许误差", value=0.5, step=0.1)
+            # 【修改点 2】优化了容差的默认值和步长
+            tolerance = st.number_input("允许误差", value=0.1, step=0.01)
             
         if st.button("开始分析", type="primary"):
             with st.spinner("数据分析中..."):
-                result_df = find_multiple_solutions(target_type, target_value, tolerance)
+                # 传入 top_n=20，确保最多只输出 20 组结果
+                result_df = find_multiple_solutions(target_type, target_value, tolerance, top_n=20)
                 
                 if result_df.empty:
-                    st.warning("未找到匹配的参数组合。")
+                    st.warning("未找到匹配的参数组合，请尝试放大允许误差。")
                 else:
-                    st.success(f"分析完成，找到 {len(result_df)} 组可行方案。")
+                    # 【修改点 3】文案同步更新
+                    st.success(f"分析完成，为您展示最优的 {len(result_df)} 组方案。")
                     st.dataframe(
                         result_df.style.format({
                             "A (层厚/mm)": "{:.4f}",
